@@ -1,0 +1,10 @@
+# 系统/编辑器文件
+.DS_Store
+Thumbs.db
+*.swp
+
+# 日志
+*.log
+
+# 依赖（本项目为纯静态，无需 node_modules）
+node_modules/

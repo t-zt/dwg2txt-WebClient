@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DWG 地块坐标 & DXF 转换</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:16px;padding:40px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:520px;width:100%;text-align:center}
+h1{font-size:26px;color:#1a1a2e;margin-bottom:6px}
+.sub{color:#666;font-size:14px;margin-bottom:8px}
+.desc{color:#999;font-size:12px;margin-bottom:24px;line-height:1.5}
+.dropzone{border:2px dashed #c5cae9;border-radius:12px;padding:40px 20px;cursor:pointer;transition:.3s;background:#f8f9ff;position:relative}
+.dropzone:hover,.dropzone.dragover{border-color:#667eea;background:#eef0ff}
+.dropzone.has-file{border-color:#4caf50;background:#f1f8e9}
+.dropzone-icon{font-size:48px;margin-bottom:10px}
+.dropzone-text{color:#333;font-size:15px}
+.dropzone-hint{color:#999;font-size:13px;margin-top:4px}
+.dropzone input[type=file]{display:none}
+.file-info{display:none;margin-top:12px;padding:10px 14px;background:#e8f5e9;border-radius:8px;font-size:13px;color:#2e7d32;text-align:left}
+.file-info.show{display:block}
+button.convert-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:14px 40px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;margin-top:16px;transition:.3s;width:100%}
+button.convert-btn:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(102,126,234,.4)}
+button.convert-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.progress-area{display:none;margin-top:20px;text-align:left}
+.progress-area.show{display:block}
+.progress-item{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;color:#555}
+.progress-item .spinner{width:16px;height:16px;border:2px solid #e0e0e0;border-top:2px solid #667eea;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.progress-item .check{color:#4caf50;font-size:18px;flex-shrink:0;width:20px;text-align:center}
+.progress-item .cross{color:#d32f2f;font-size:18px;flex-shrink:0;width:20px;text-align:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.results{display:none;margin-top:16px;gap:10px}
+.results.show{display:flex;flex-direction:column}
+.result-btn{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;transition:.3s;cursor:pointer;border:none;width:100%}
+.result-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.result-btn .label{display:flex;align-items:center;gap:8px}
+.result-btn .size{font-size:12px;font-weight:400;opacity:.8}
+.result-btn.pol{background:linear-gradient(135deg,#43a047,#66bb6a);color:#fff}
+.result-btn.dxf{background:linear-gradient(135deg,#1565c0,#42a5f5);color:#fff}
+.result-btn.failed{background:#f5f5f5;color:#999;cursor:default}
+.result-btn.failed:hover{transform:none;box-shadow:none}
+.error{color:#d32f2f;margin-top:12px;font-size:13px;display:none;text-align:left;padding:8px 12px;background:#ffebee;border-radius:6px;line-height:1.5}
+.error.show{display:block}
+.priority-info{font-size:12px;color:#888;margin-top:8px;padding:8px 12px;background:#fff3e0;border-radius:6px;display:none;text-align:left;line-height:1.6}
+.priority-info.show{display:block}
+.browser-badge{display:inline-block;background:#e8f5e9;color:#2e7d32;font-size:11px;padding:3px 10px;border-radius:20px;margin-bottom:12px;font-weight:500}
+.info-note{font-size:12px;color:#999;margin-top:10px;padding:8px 12px;background:#f5f5f5;border-radius:6px;text-align:left;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="browser-badge" id="badge">⚡ 浏览器端处理，文件不离开本机</div>
+  <h1>📐 DWG 转换工具</h1>
+  <p class="sub">上传 DWG 文件，同步获取坐标和 DXF</p>
+  <p class="desc">一次上传，同时生成坐标文件(txt)和完整 DXF 文件</p>
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">📁</div>
+    <div class="dropzone-text">拖拽 DWG 文件到此处</div>
+    <div class="dropzone-hint">或点击选择文件</div>
+    <input type="file" id="fileInput" accept=".dwg">
+    <div class="file-info" id="fileInfo"></div>
+  </div>
+  <button class="convert-btn" id="convertBtn" disabled>🔄 开始转换</button>
+  <div class="progress-area" id="progressArea">
+    <div class="progress-item" id="polProgress">
+      <span id="polIcon">⏳</span>
+      <span id="polText">等待...</span>
+    </div>
+    <div class="progress-item" id="dxfProgress">
+      <span id="dxfIcon">⏳</span>
+      <span id="dxfText">等待...</span>
+    </div>
+  </div>
+  <div class="results" id="results"></div>
+  <div class="error" id="error"></div>
+  <div class="priority-info" id="priorityInfo"></div>
+  <div class="info-note">💡 大文件也能处理，无服务器限制。所有计算在浏览器本地完成。</div>
+</div>
+
+<script src="/wasm/dwg2pol.js"></script>
+<script src="/wasm/dxfgen.js"></script>
+<script>
+(function(){
+var dz=document.getElementById('dropzone');
+var fi=document.getElementById('fileInput');
+var fi2=document.getElementById('fileInfo');
+var cb=document.getElementById('convertBtn');
+var pa=document.getElementById('progressArea');
+var po=document.getElementById('polIcon');
+var pt=document.getElementById('polText');
+var di=document.getElementById('dxfIcon');
+var dt=document.getElementById('dxfText');
+var rs=document.getElementById('results');
+var er=document.getElementById('error');
+var pi=document.getElementById('priorityInfo');
+var badge=document.getElementById('badge');
+var f=null;
+var wasmReady=false;
+var wasmModule=null;
+// 输出捕获闭包 — 在 createModule 时传入，通过此变量实现每调用重置
+var wasmOutput=null;
+
+// 加载 WASM
+async function initWasm(){
+  try{
+    pt.textContent='正在加载 WASM 引擎(5MB,请稍候)...';
+    po.textContent='';po.className='spinner';
+    pa.classList.add('show');
+    pt.textContent='正在编译 WASM(5MB,约需5-10秒)...';
+    var initPromise=createModule({
+      noInitialRun:true,
+      print:function(t){if(wasmOutput)wasmOutput.push(t);else console.log(t)},
+      printErr:function(t){if(wasmOutput)wasmOutput.push('[ERROR] '+t);else console.error(t)},
+    });
+    wasmModule=await Promise.race([
+      initPromise,
+      new Promise(function(_,reject){setTimeout(function(){reject(new Error('WASM 初始化超时(60秒)'))},60000)})
+    ]);
+    wasmReady=true;
+    pa.classList.remove('show');
+    badge.textContent='✅ WASM 引擎已就绪，可以处理文件';
+    badge.style.background='#e8f5e9';
+    badge.style.color='#2e7d32';
+    cb.disabled=false;
+    cb.textContent='🔄 开始转换';
+  }catch(e){
+    pa.classList.remove('show');
+    er.textContent='WASM 加载失败: '+e.message;
+    er.classList.add('show');
+  }
+}
+
+// 解析坐标
+function parsePolyText(text){
+  var lines=text.split('\n').map(function(l){return l.trim()}).filter(function(l){return l});
+  var coords=[];
+  var areaHa=0;
+  var inCoords=false;
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    if(line==='[地块坐标]'){inCoords=true;continue;}
+    if(line.charAt(0)==='['&&line.charAt(line.length-1)===']'){inCoords=false;continue;}
+    if(!inCoords)continue;
+    var atMatch=line.match(/^(\d+),([\d.]+),1,1,面,,,,@$/);
+    if(atMatch){areaHa=parseFloat(atMatch[2]);continue;}
+    var ptMatch=line.match(/^J(\d+),1,([\d.]+),([\d.]+)$/);
+    if(ptMatch){coords.push({x:parseFloat(ptMatch[3]),y:parseFloat(ptMatch[2])});}
+  }
+  return {coords:coords,areaHa:areaHa};
+}
+
+// 生成 DXF（注意：HEADER 中变量之间不能有 0 标记）
+// 缓存模板
+// 生成 DXF（使用外部脚本 dxfgen.js）
+// UI
+dz.onclick=function(){fi.click()};
+dz.ondragover=function(e){e.preventDefault();dz.classList.add('dragover')};
+dz.ondragleave=function(){dz.classList.remove('dragover')};
+dz.ondrop=function(e){e.preventDefault();dz.classList.remove('dragover');handleFile(e.dataTransfer.files[0])};
+fi.onchange=function(){if(fi.files[0])handleFile(fi.files[0])};
+function handleFile(file){
+  if(!file||!file.name.toLowerCase().endsWith('.dwg')){alert('请选择 DWG 文件');return}
+  f=file;dz.classList.add('has-file');
+  fi2.textContent='📄 '+file.name+' ('+(file.size/1024).toFixed(1)+' KB)';
+  fi2.classList.add('show');
+  if(wasmReady){cb.disabled=false;cb.textContent='🔄 转换 '+file.name}
+}
+
+// 处理文件
+async function processFile(file){
+  var buf=await file.arrayBuffer();
+  var bytes=new Uint8Array(buf);
+  var Module=wasmModule;
+  wasmOutput=[];
+  Module.FS.writeFile('/input.dwg',bytes);
+  var callMainOk=typeof Module.callMain==='function';
+  var exitCode=-1;
+  try{exitCode=Module.callMain(['/input.dwg'])}catch(e){exitCode='ERR:'+e.message}
+  try{Module.FS.unlink('/input.dwg')}catch(e){}
+  var out=wasmOutput.join('\n');
+  // 如果 stdout 为空，也尝试读取 /tmp/output.txt 或 /output.txt
+  if(!out){
+    try{var tmpFiles=Module.FS.readdir('/tmp');for(var i=0;i<tmpFiles.length;i++){var fn=tmpFiles[i];if(fn!=='.'&&fn!=='..'){var c=Module.FS.readFile('/tmp/'+fn,{encoding:'utf8'});if(c&&c.length>0){out=c;break}}}}catch(e){}
+  }
+  if(!out){
+    try{var rootFiles=Module.FS.readdir('/');for(var i=0;i<rootFiles.length;i++){var fn=rootFiles[i];if(fn!=='.'&&fn!=='..'&&fn!=='input.dwg'){var c=Module.FS.readFile('/'+fn,{encoding:'utf8'});if(c&&c.length>0){out=c;break}}}}catch(e){}
+  }
+  // 如果还是空的，返回诊断信息
+  if(!out){out='[DEBUG] callMain='+callMainOk+' exit='+exitCode+' (EMPTY)'}
+  wasmOutput=null;
+  return out;
+}
+
+cb.onclick=async function(){
+  if(!f||!wasmReady)return;
+  er.classList.remove('show');rs.classList.remove('show');rs.innerHTML='';
+  pi.classList.remove('show');
+  pa.classList.add('show');
+  po.textContent='';po.className='spinner';pt.textContent='正在提取坐标...';
+  di.textContent='';di.className='spinner';dt.textContent='正在生成 DXF...';
+  var nameBase=f.name.replace(/\.dwg$/i,'');
+  var polName=nameBase+'_坐标.txt';
+  var dxfName=nameBase+'.dxf';
+  try{
+    var rawText=await processFile(f);
+    // ASCII → 中文翻译
+    rawText=rawText.replace('[SHUXING]','[属性描述]').replace('ZUOBIAOXI=','坐标系=').replace('FENDAI=','几度分带=').replace('TOUYING=','投影类型=').replace('DANWEI=','计量单位=').replace('DAIHAO=','带号=').replace('JINGDU=','精度=').replace('ZHUANHUAN=','转换参数=').replace('[DKKZB]','[地块坐标]').replace('坐标系=2000','坐标系=2000国家大地坐标系').replace('投影类型=GK','投影类型=高斯克吕格').replace('计量单位=M','计量单位=米');
+    rawText=rawText.split(',M,,,,@').join(',面,,,,@');
+    // 移除 ===DXF-START=== 段
+    var txtContent=rawText;
+    var dxfMarker='===DXF-START===';
+    if(txtContent.indexOf(dxfMarker)!==-1){
+      txtContent=txtContent.split(dxfMarker)[0].trimEnd();
+    }
+    // 面积已经是公顷，无需转换
+    // 解析坐标
+    var parsed=parsePolyText(txtContent);
+    var coords=parsed.coords;
+    var areaHa=parsed.areaHa;
+    // 坐标提取完成
+    po.textContent='✅';po.className='check';pt.textContent='坐标提取完成';
+    // 生成 DXF
+    var templateText=await loadTemplate();
+    var dxfContent=generateDxfFromTemplate(coords,templateText);
+    di.textContent='✅';di.className='check';dt.textContent='DXF 生成完成';
+    // 显示结果
+    rs.classList.add('show');
+    var polBlob=new Blob([txtContent],{type:'text/plain;charset=utf-8'});
+    var polUrl=URL.createObjectURL(polBlob);
+    var dxfBlob=dxfContent?new Blob([dxfContent],{type:'application/dxf'}):null;
+    var dxfUrl=dxfBlob?URL.createObjectURL(dxfBlob):null;
+    var html='';
+    html+='<a class="result-btn pol" href="'+polUrl+'" download="'+polName+'"><span class="label">📝 坐标文件 (txt)</span><span class="size">'+(polBlob.size/1024).toFixed(1)+' KB</span></a>';
+    if(dxfUrl){
+      html+='<a class="result-btn dxf" href="'+dxfUrl+'" download="'+dxfName+'"><span class="label">📐 DXF 文件</span><span class="size">'+(dxfBlob.size/1024).toFixed(1)+' KB</span></a>';
+    }
+    if(coords.length>0){
+      pi.textContent='提取优先级: ① jzd图层闭合线 → ② 红色闭合线(最多点) → ③ 最多点闭合线 | 共 '+coords.length+' 点，面积: '+areaHa.toFixed(3)+' 公顷';
+      pi.classList.add('show');
+    }
+    rs.innerHTML=html;
+  }catch(e){
+    po.textContent='❌';po.className='cross';pt.textContent='提取失败: '+e.message;
+    di.textContent='❌';di.className='cross';dt.textContent='DXF 生成失败';
+    er.textContent='处理失败: '+e.message;
+    er.classList.add('show');
+  }
+};
+
+// 启动
+initWasm();
+})();
+</script>
+</body>
+</html>
