@@ -4,7 +4,7 @@ var _templateDxfText = null;
 
 async function loadTemplate() {
   if (_templateDxfText) return _templateDxfText;
-  var r = await fetch('/template.dxf');
+  var r = await fetch('template.dxf');
   if (!r.ok) throw new Error('模板加载失败: ' + r.status);
   _templateDxfText = await r.text();
   return _templateDxfText;

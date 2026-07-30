@@ -194,6 +194,7 @@ async function processFile(file){
 
 cb.onclick=async function(){
   if(!f||!wasmReady)return;
+  cb.disabled=true;
   er.classList.remove('show');rs.classList.remove('show');rs.innerHTML='';
   pi.classList.remove('show');
   pa.classList.add('show');
@@ -220,10 +221,16 @@ cb.onclick=async function(){
     var areaHa=parsed.areaHa;
     // 坐标提取完成
     po.textContent='✅';po.className='check';pt.textContent='坐标提取完成';
-    // 生成 DXF
-    var templateText=await loadTemplate();
-    var dxfContent=generateDxfFromTemplate(coords,templateText);
-    di.textContent='✅';di.className='check';dt.textContent='DXF 生成完成';
+    // 生成 DXF（独立容错：即使 DXF 失败，坐标结果仍正常展示）
+    var dxfContent=null;
+    try{
+      var templateText=await loadTemplate();
+      dxfContent=generateDxfFromTemplate(coords,templateText);
+      di.textContent='✅';di.className='check';dt.textContent='DXF 生成完成';
+    }catch(e){
+      di.textContent='⚠️';di.className='cross';dt.textContent='DXF 生成跳过: '+e.message;
+      dxfContent=null;
+    }
     // 显示结果
     rs.classList.add('show');
     var polBlob=new Blob([txtContent],{type:'text/plain;charset=utf-8'});
@@ -245,6 +252,8 @@ cb.onclick=async function(){
     di.textContent='❌';di.className='cross';dt.textContent='DXF 生成失败';
     er.textContent='处理失败: '+e.message;
     er.classList.add('show');
+  }finally{
+    cb.disabled=false;
   }
 };
 
