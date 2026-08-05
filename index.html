@@ -2,75 +2,120 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>DWG 地块坐标 & DXF 转换</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#fff;border-radius:16px;padding:40px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:520px;width:100%;text-align:center}
-h1{font-size:26px;color:#1a1a2e;margin-bottom:6px}
-.sub{color:#666;font-size:14px;margin-bottom:8px}
-.desc{color:#999;font-size:12px;margin-bottom:24px;line-height:1.5}
-.dropzone{border:2px dashed #c5cae9;border-radius:12px;padding:40px 20px;cursor:pointer;transition:.3s;background:#f8f9ff;position:relative}
-.dropzone:hover,.dropzone.dragover{border-color:#667eea;background:#eef0ff}
-.dropzone.has-file{border-color:#4caf50;background:#f1f8e9}
-.dropzone-icon{font-size:48px;margin-bottom:10px}
-.dropzone-text{color:#333;font-size:15px}
-.dropzone-hint{color:#999;font-size:13px;margin-top:4px}
+:root{
+  --accent:#0A84FF;
+  --accent2:#5E5CE6;
+  --glass:rgba(255,255,255,.55);
+  --glass-strong:rgba(255,255,255,.72);
+  --stroke:rgba(255,255,255,.6);
+  --text:#1c1c1e;
+  --text-2:#636366;
+  --radius-l:32px;
+  --radius-m:22px;
+  --radius-s:15px;
+  --spring:cubic-bezier(.34,1.56,.64,1);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --glass:rgba(28,28,30,.5);
+    --glass-strong:rgba(30,30,32,.68);
+    --stroke:rgba(255,255,255,.14);
+    --text:#f5f5f7;
+    --text-2:#98989d;
+  }
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,sans-serif;
+  color:var(--text);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:24px;position:relative;overflow:hidden;background:#eef1f6;
+}
+/* 流动光斑背景 —— Liquid Glass 质感来源 */
+body::before,body::after{
+  content:"";position:fixed;border-radius:50%;filter:blur(80px);opacity:.6;z-index:0;
+  animation:float 18s ease-in-out infinite;
+}
+body::before{width:540px;height:540px;background:radial-gradient(circle at 30% 30%,#7aa7ff,#5e5ce6);top:-130px;left:-90px}
+body::after{width:500px;height:500px;background:radial-gradient(circle at 70% 70%,#ff9ec7,#ff6b9d);bottom:-150px;right:-110px;animation-delay:-9s}
+@keyframes float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,-30px) scale(1.08)}}
+
+.glass{
+  background:var(--glass);
+  backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border:1px solid var(--stroke);
+  box-shadow:0 30px 70px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.5);
+}
+.card{position:relative;z-index:1;width:100%;max-width:460px;padding:38px 32px;border-radius:var(--radius-l);text-align:center}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 14px;border-radius:100px;background:var(--glass-strong);border:1px solid var(--stroke);color:var(--text-2);margin-bottom:18px;backdrop-filter:blur(20px)}
+h1{font-size:27px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+.sub{font-size:15px;color:var(--text);font-weight:500;margin-bottom:4px}
+.desc{font-size:13px;color:var(--text-2);margin-bottom:26px;line-height:1.5}
+
+.dropzone{position:relative;border:2px dashed var(--stroke);border-radius:var(--radius-m);padding:44px 22px;cursor:pointer;transition:.4s var(--spring);background:var(--glass-strong);overflow:hidden}
+.dropzone:hover,.dropzone.dragover{border-color:var(--accent);transform:scale(1.015);background:rgba(10,132,255,.08)}
+.dropzone.has-file{border-style:solid;border-color:#34c759;background:rgba(52,199,89,.1)}
+.dz-icon{font-size:46px;margin-bottom:10px;transition:.4s var(--spring)}
+.dropzone.dragover .dz-icon{transform:scale(1.15) translateY(-4px)}
+.dz-text{font-size:16px;font-weight:600}
+.dz-hint{font-size:13px;color:var(--text-2);margin-top:4px}
 .dropzone input[type=file]{display:none}
-.file-info{display:none;margin-top:12px;padding:10px 14px;background:#e8f5e9;border-radius:8px;font-size:13px;color:#2e7d32;text-align:left}
-.file-info.show{display:block}
-button.convert-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:14px 40px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;margin-top:16px;transition:.3s;width:100%}
-button.convert-btn:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(102,126,234,.4)}
-button.convert-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
-.progress-area{display:none;margin-top:20px;text-align:left}
-.progress-area.show{display:block}
-.progress-item{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;color:#555}
-.progress-item .spinner{width:16px;height:16px;border:2px solid #e0e0e0;border-top:2px solid #667eea;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
-.progress-item .check{color:#4caf50;font-size:18px;flex-shrink:0;width:20px;text-align:center}
-.progress-item .cross{color:#d32f2f;font-size:18px;flex-shrink:0;width:20px;text-align:center}
+.file-info{display:none;margin-top:14px;padding:11px 16px;border-radius:var(--radius-s);background:var(--glass-strong);border:1px solid var(--stroke);font-size:13px;font-weight:500;color:var(--text);text-align:left}
+.file-info.show{display:block;animation:pop .4s var(--spring)}
+
+.convert-btn{width:100%;margin-top:20px;padding:15px;border:none;border-radius:var(--radius-s);font-size:17px;font-weight:600;color:#fff;cursor:pointer;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 12px 28px rgba(10,132,255,.4);transition:.3s var(--spring)}
+.convert-btn:hover{transform:translateY(-2px);box-shadow:0 18px 36px rgba(10,132,255,.5)}
+.convert-btn:active{transform:scale(.97)}
+.convert-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;filter:grayscale(.3)}
+
+.progress-area{display:none;margin-top:22px;text-align:left}
+.progress-area.show{display:block;animation:pop .4s var(--spring)}
+.p-item{display:flex;align-items:center;gap:12px;padding:11px 0;font-size:14.5px;color:var(--text)}
+.spinner{width:18px;height:18px;border:2.5px solid rgba(120,120,128,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
-.results{display:none;margin-top:16px;gap:10px}
-.results.show{display:flex;flex-direction:column}
-.result-btn{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;transition:.3s;cursor:pointer;border:none;width:100%}
-.result-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
-.result-btn .label{display:flex;align-items:center;gap:8px}
-.result-btn .size{font-size:12px;font-weight:400;opacity:.8}
-.result-btn.pol{background:linear-gradient(135deg,#43a047,#66bb6a);color:#fff}
-.result-btn.dxf{background:linear-gradient(135deg,#1565c0,#42a5f5);color:#fff}
-.result-btn.failed{background:#f5f5f5;color:#999;cursor:default}
-.result-btn.failed:hover{transform:none;box-shadow:none}
-.error{color:#d32f2f;margin-top:12px;font-size:13px;display:none;text-align:left;padding:8px 12px;background:#ffebee;border-radius:6px;line-height:1.5}
-.error.show{display:block}
-.priority-info{font-size:12px;color:#888;margin-top:8px;padding:8px 12px;background:#fff3e0;border-radius:6px;display:none;text-align:left;line-height:1.6}
+.check,.cross{width:22px;text-align:center;font-size:19px;flex:none}
+.check{color:#34c759}.cross{color:#ff3b30}
+
+.results{display:none;margin-top:18px;flex-direction:column;gap:12px}
+.results.show{display:flex;animation:pop .45s var(--spring)}
+.r-btn{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-radius:var(--radius-s);text-decoration:none;font-size:14.5px;font-weight:600;color:#fff;transition:.3s var(--spring);border:1px solid rgba(255,255,255,.25)}
+.r-btn:hover{transform:translateY(-2px)}
+.r-btn .label{display:flex;align-items:center;gap:9px}
+.r-btn .size{font-size:12px;font-weight:400;opacity:.85}
+.r-btn.pol{background:linear-gradient(135deg,#30d158,#28cd41)}
+.r-btn.dxf{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.r-btn.failed{background:var(--glass-strong);color:var(--text-2);border:1px solid var(--stroke)}
+
+.error{display:none;margin-top:14px;padding:12px 16px;border-radius:var(--radius-s);font-size:13px;text-align:left;line-height:1.5;color:#ff3b30;background:rgba(255,59,48,.1);border:1px solid rgba(255,59,48,.25)}
+.error.show{display:block;animation:pop .4s var(--spring)}
+.priority-info{display:none;margin-top:14px;padding:12px 16px;border-radius:var(--radius-s);font-size:12px;text-align:left;line-height:1.6;color:var(--text-2);background:var(--glass-strong);border:1px solid var(--stroke)}
 .priority-info.show{display:block}
-.browser-badge{display:inline-block;background:#e8f5e9;color:#2e7d32;font-size:11px;padding:3px 10px;border-radius:20px;margin-bottom:12px;font-weight:500}
-.info-note{font-size:12px;color:#999;margin-top:10px;padding:8px 12px;background:#f5f5f5;border-radius:6px;text-align:left;line-height:1.5}
+.info-note{margin-top:18px;padding:11px 16px;border-radius:var(--radius-s);font-size:12px;text-align:left;line-height:1.5;color:var(--text-2);background:var(--glass-strong);border:1px solid var(--stroke)}
+@keyframes pop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="browser-badge" id="badge">⚡ 浏览器端处理，文件不离开本机</div>
-  <h1>📐 DWG 转换工具</h1>
-  <p class="sub">上传 DWG 文件，同步获取坐标和 DXF</p>
-  <p class="desc">一次上传，同时生成坐标文件(txt)和完整 DXF 文件</p>
+<div class="card glass">
+  <div class="badge" id="badge">⚡ 浏览器端处理，文件不离开本机</div>
+  <h1>📐 DWG 转换</h1>
+  <p class="sub">上传 DWG，同步获取坐标与 DXF</p>
+  <p class="desc">一次上传，自动生成坐标文件（txt）与完整 DXF 文件</p>
   <div class="dropzone" id="dropzone">
-    <div class="dropzone-icon">📁</div>
-    <div class="dropzone-text">拖拽 DWG 文件到此处</div>
-    <div class="dropzone-hint">或点击选择文件</div>
+    <div class="dz-icon">📁</div>
+    <div class="dz-text">拖拽 DWG 文件到此处</div>
+    <div class="dz-hint">或点击选择文件</div>
     <input type="file" id="fileInput" accept=".dwg">
     <div class="file-info" id="fileInfo"></div>
   </div>
   <button class="convert-btn" id="convertBtn" disabled>🔄 开始转换</button>
   <div class="progress-area" id="progressArea">
-    <div class="progress-item" id="polProgress">
-      <span id="polIcon">⏳</span>
-      <span id="polText">等待...</span>
-    </div>
-    <div class="progress-item" id="dxfProgress">
-      <span id="dxfIcon">⏳</span>
-      <span id="dxfText">等待...</span>
-    </div>
+    <div class="p-item" id="polProgress"><span id="polIcon" class="spinner"></span><span id="polText">等待...</span></div>
+    <div class="p-item" id="dxfProgress"><span id="dxfIcon" class="spinner"></span><span id="dxfText">等待...</span></div>
   </div>
   <div class="results" id="results"></div>
   <div class="error" id="error"></div>
